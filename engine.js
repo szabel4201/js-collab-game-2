@@ -1,14 +1,5 @@
 const MAKS_ENERGIA = 10;
 
-// Kolekcja pokojów
-const pokoje = [
-  { id: 1, nazwa: "Recepcja", opis: "Na biurku leży plastikowa karta dostępu." },
-  { id: 2, nazwa: "Magazyn", opis: "Na półce leży zapasowy bezpiecznik." },
-  { id: 3, nazwa: "Serwerownia", opis: "Pomieszczenie z głównymi szafami serwerowymi." },
-  { id: 4, nazwa: "Wyjscie", opis: "Drzwi prowadzące na wolność." }
-];
-
-// Fabryka stanu początkowego (zwraca niezależny obiekt)
 function stanPoczatkowy() {
   return {
     pokoj: 1,
@@ -21,122 +12,130 @@ function stanPoczatkowy() {
   };
 }
 
-function pobierzPokoj(id) {
-  return pokoje.find(p => p.id === id);
+function start(stan) {
+  stan.pokoj = 1;
+  stan.energia = MAKS_ENERGIA;
+  stan.karta = false;
+  stan.bezpiecznik = false;
+  stan.zasilanie = false;
+  stan.koniec = false;
+  stan.wygrana = false;
+  console.log("Start gry! Wpisz gra.pomoc()");
+  rozejrzyj(stan);
+  return stan;
 }
 
-// Czysta funkcja przejścia (reguły gry)
-function przejscie(stanPrzed, komenda) {
-  if (stanPrzed.koniec) {
-    return { stan: stanPrzed, komunikat: "Gra dobiegła końca. Wpisz gra.start(), aby zacząć od nowa." };
+function zakonczTure(stan) {
+  stan.energia = stan.energia - 1;
+  console.log("Pozostała energia: " + stan.energia);
+  if (stan.wygrana) {
+    console.log("WYGRANA!");
+  } else if (stan.energia === 0) {
+    stan.koniec = true;
+    console.log("PRZEGRANA! Wpisz gra.start()");
   }
+}
 
-  let nowyStan = { ...stanPrzed };
-  let udane = false;
-  let komunikat = "";
+function pomoc() {
+  console.log("Dostępne komendy: gra.start(), gra.status(), gra.mapa(), gra.rozejrzyj(), gra.idz('lewo'), gra.idz('prawo'), gra.akcja('karta'), gra.akcja('bezpiecznik'), gra.akcja('napraw'), gra.akcja('wyjdz')");
+}
 
-  // Obsługa ruchu
-  if (komenda === "lewo" || komenda === "prawo") {
-    let nastepnyPokoj = nowyStan.pokoj + (komenda === "prawo" ? 1 : -1);
-    if (nastepnyPokoj < 1 || nastepnyPokoj > 4) {
-      return { stan: stanPrzed, komunikat: "Nie możesz iść w tę stronę — napotykasz ścianę." };
-    }
-    nowyStan.pokoj = nastepnyPokoj;
-    udane = true;
-    const p = pobierzPokoj(nastepnyPokoj);
-    komunikat = "Idziesz do: " + p.nazwa + ". " + p.opis;
-  } 
-  // Obsługa akcji
-  else {
-    switch (komenda) {
-      case "karta":
-        if (nowyStan.pokoj !== 1 || nowyStan.karta) {
-          return { stan: stanPrzed, komunikat: "Tutaj nie ma karty lub już ją masz." };
-        }
-        nowyStan.karta = true;
-        udane = true;
-        komunikat = "Zabierasz kartę dostępu.";
-        break;
+function status(stan) {
+  console.log("Pokój: " + stan.pokoj);
+  console.log("Energia: " + stan.energia);
+  console.log("Karta: " + stan.kartera ? "tak" : "nie");
+  console.log("Bezpiecznik: " + stan.bezpiecznik);
+  console.log("Zasilanie: " + stan.zasilanie);
+}
 
-      case "bezpiecznik":
-        if (nowyStan.pokoj !== 2 || nowyStan.bezpiecznik || nowyStan.zasilanie) {
-          return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika." };
-        }
-        nowyStan.bezpiecznik = true;
-        udane = true;
-        komunikat = "Zabierasz zapasowy bezpiecznik.";
-        break;
-
-      case "napraw":
-        if (nowyStan.pokoj !== 3 || !nowyStan.bezpiecznik || nowyStan.zasilanie) {
-          return { stan: stanPrzed, komunikat: "Nie możesz tutaj naprawić zasilania." };
-        }
-        nowyStan.bezpiecznik = false;
-        nowyStan.zasilanie = true;
-        udane = true;
-        komunikat = "Montujesz bezpiecznik i przywracasz zasilanie w serwerowni!";
-        break;
-
-      case "wyjdz":
-        if (nowyStan.pokoj !== 4 || !nowyStan.karta || !nowyStan.zasilanie) {
-          return { stan: stanPrzed, komunikat: "Nie możesz otworzyć drzwi (wymaga karty i zasilania)." };
-        }
-        nowyStan.wygrana = true;
-        nowyStan.koniec = true;
-        udane = true;
-        komunikat = "Otwierasz drzwi wyjściowe! Wygrana!";
-        break;
-
-      default:
-        return { stan: stanPrzed, komunikat: "Nieznana komenda. Wpisz gra.pomoc()." };
-    }
-  }
-
-  // Rozliczenie energii po udanym działaniu
-  if (udane) {
-    nowyStan.energia = nowyStan.energia - 1;
-    if (nowyStan.wygrana) {
-      // Wygrana ma priorytet
-    } else if (nowyStan.energia <= 0) {
-      nowyStan.koniec = true;
-      komunikat += "\nPRZEGRANA. Zasilanie awaryjne padło.";
+function mapa(stan) {
+  for (let i = 1; i <= 4; i++) {
+    if (i === stan.pokoj) {
+      console.log(i + " [tu jesteś]");
     } else {
-      komunikat += "\nPozostała energia: " + nowyStan.energia;
+      console.log(i);
     }
   }
-
-  return { stan: nowyStan, komunikat };
 }
 
-// Walidator stanu
-function czyStan(kandydat) {
-  if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
-    return false;
+function rozejrzyj(stan) {
+  if (stan.pokoj === 1) {
+    console.log("Jesteś w Recepcji. Leży tu karta.");
+  } else if (stan.pokoj === 2) {
+    console.log("Jesteś w Magazynie. Leży tu bezpiecznik.");
+  } else if (stan.pokoj === 3) {
+    console.log("Jesteś w Serwerowni.");
+  } else if (stan.pokoj === 4) {
+    console.log("Jesteś przy Wyjściu.");
   }
-  if (!Number.isInteger(kandydat.pokoj) || kandydat.pokoj < 1 || kandydat.pokoj > 4) return false;
-  if (!Number.isInteger(kandydat.energia) || kandydat.energia < 0 || kandydat.energia > MAKS_ENERGIA) return false;
-  if (typeof kandydat.karta !== "boolean") return false;
-  if (typeof kandydat.bezpiecznik !== "boolean") return false;
-  if (typeof kandydat.zasilanie !== "boolean") return false;
-  if (typeof kandydat.koniec !== "boolean") return false;
-  if (typeof kandydat.wygrana !== "boolean") return false;
-  return true;
 }
 
-// Eksport do JSON
-function eksportujStan(stanAktualny) {
-  const pakiet = { wersja: 1, stan: stanAktualny };
-  return JSON.stringify(pakiet);
+function idz(stan, kierunek) {
+  if (stan.koniec) {
+    console.log("Gra się skończyła.");
+    return;
+  }
+
+  let nowyPokoj = stan.pokoj;
+  if (kierunek === "prawo") {
+    nowyPokoj = stan.pokoj + 1;
+  } else if (kierunek === "lewo") {
+    nowyPokoj = stan.pokoj - 1;
+  } else {
+    console.log("Użyj 'lewo' lub 'prawo'.");
+    return;
+  }
+
+  if (nowyPokoj < 1 || nowyPokoj > 4) {
+    console.log("Ściana!");
+    return;
+  }
+
+  stan.pokoj = nowyPokoj;
+  rozejrzyj(stan);
+  zakonczTure(stan);
 }
 
-// Import z JSON
-function importujStan(tekst) {
-  if (typeof tekst !== "string" || tekst.trim() === "") {
-    throw new Error("Podany tekst jest pusty lub nie jest ciągiem znaków.");
+function akcja(stan, co) {
+  if (stan.koniec) {
+    console.log("Gra się skończyła.");
+    return;
   }
-  const pakiet = JSON.parse(tekst);
-  if (!pakiet || pakiet.wersja !== 1 || !czyStan(pakiet.stan)) {
-    throw new Error("Niepoprawna struktura pakietu, wersja lub błąd walidacji stanu.");
+
+  if (co === "karta") {
+    if (stan.pokoj !== 1 || stan.karta) {
+      console.log("Nie można tego zrobić.");
+      return;
+    }
+    stan.karta = true;
+    console.log("Podniesiono kartę.");
+  } else if (co === "bezpiecznik") {
+    if (stan.pokoj !== 2 || stan.bezpiecznik || stan.zasilanie) {
+      console.log("Nie można tego zrobić.");
+      return;
+    }
+    stan.bezpiecznik = true;
+    console.log("Podniesiono bezpiecznik.");
+  } else if (co === "napraw") {
+    if (stan.pokoj !== 3 || !stan.bezpiecznik || stan.zasilanie) {
+      console.log("Nie można tego zrobić.");
+      return;
+    }
+    stan.bezpiecznik = false;
+    stan.zasilanie = true;
+    console.log("Naprawiono zasilanie.");
+  } else if (co === "wyjdz") {
+    if (stan.pokoj !== 4 || !stan.karta || !stan.zasilanie) {
+      console.log("Nie można tego zrobić.");
+      return;
+    }
+    stan.wygrana = true;
+    stan.koniec = true;
+    console.log("Otwarto drzwi!");
+  } else {
+    console.log("Nieznana akcja.");
+    return;
   }
-  return pakiet.stan;
+
+  zakonczTure(stan);
 }
