@@ -1,0 +1,223 @@
+Oto dokładne, linijka po linijce wyjaśnienie całego pliku **`app.js`**. Ten plik odpowiada za interfejs, zarządzanie pamięcią gry oraz łączenie reguł z silnika (`engine.js`) z konsolą przeglądarki, żebyś mógł wygodnie wydawać polecenia.
+
+---
+
+### 1. Inicjalizacja stanu gry
+
+```javascript
+let stan = stanPoczatkowy();
+
+```
+
+* Tworzy zmienną `stan`, która będzie przechowywać aktualne dane naszej rozgrywki (gdzie jesteś, ile masz energii, jakie przedmioty zebrałeś).
+* Wartość pobiera bezpośrednio z funkcji `stanPoczatkowy()`, którą dostarcza silnik (`engine.js`).
+
+---
+
+### 2. Funkcje interfejsu (Widok konsoli)
+
+Te funkcje dbają o to, co pojawia się na ekranie konsoli (F12) jako odpowiedź na Twoje działania.
+
+#### Funkcja `pomoc()`
+
+```javascript
+function pomoc() {
+  console.log("=== POMOC ===");
+  console.log("gra.start()");
+  console.log("gra.status()");
+  console.log("gra.mapa()");
+  console.log("gra.rozejrzyj()");
+  console.log("gra.idz('lewo') / gra.idz('prawo')");
+  console.log("gra.akcja('karta')");
+  console.log("gra.akcja('bezpiecznik')");
+  console.log("gra.akcja('napraw')");
+  console.log("gra.akcja('wyjdz')");
+  console.log("gra.eksportuj()");
+  console.log("gra.importuj(tekst)");
+}
+
+```
+
+* **Co robi:** Wypisuje w konsoli czytelną listę wszystkich komend, które gracz może wpisać, żeby sterować grą.
+
+#### Funkcja `status()`
+
+```javascript
+function status() {
+  console.log("--- STATUS ---");
+  console.log("Pokój: " + stan.pokoj + " (" + nazwaPokoju(stan.pokoj) + ")");
+  console.log("Energia: " + stan.energia);
+  console.log("Karta: " + stan.karta);
+  console.log("Bezpiecznik: " + stan.bezpiecznik);
+  console.log("Zasilanie: " + stan.zasilanie);
+}
+
+```
+
+* **Co robi:** Pokazuje aktualny stan gry – w jakim numerze pokoju i jakiej lokacji się znajdujesz, ile masz punktów energii oraz jakie przedmioty udało Ci się zdobyć.
+
+#### Funkcja `mapa()`
+
+```javascript
+function mapa() {
+  let i = 1;
+  while (i <= 4) {
+    if (i === stan.pokoj) {
+      console.log(i + " [tu jesteś]");
+    } else {
+      console.log(i);
+    }
+    i++;
+  }
+}
+
+```
+
+* **Co robi:** Rysuje w konsoli prostą listę wszystkich 4 pokoi za pomocą pętli `while`. Jeśli numer pokoju zgadza się z Twoją obecną pozycją (`stan.pokoj`), dopisuje obok niego napis `[tu jesteś]`.
+
+#### Funkcja `rozejrzyj()`
+
+```javascript
+function rozejrzyj() {
+  if (stan.pokoj === 1) {
+    console.log("Jesteś w Recepcji.");
+    if (stan.karta === false) {
+      console.log("Na biurku leży karta.");
+    } else {
+      console.log("Biurko jest puste.");
+    }
+  } else if (stan.pokoj === 2) {
+    console.log("Jesteś w Magazynie.");
+    if (stan.bezpiecznik === false && stan.zasilanie === false) {
+      console.log("Na półce leży bezpiecznik.");
+    } else {
+      console.log("Półka jest pusta.");
+    }
+  } else if (stan.pokoj === 3) {
+    console.log("Jesteś w Serwerowni. Zasilanie włączone: " + stan.zasilanie);
+  } else if (stan.pokoj === 4) {
+    console.log("Stoisz przy Wyjściu.");
+  }
+}
+
+```
+
+* **Co robi:** Sprawdza za pomocą instrukcji `if / else`, w jakim pokoju aktualnie stoi gracz, i opowiada mu o otoczeniu (oraz o tym, czy leży tam przedmiot, który można podnieść).
+
+---
+
+### 3. Obiekt `window.gra` (Publiczne API)
+
+Ten fragment tworzy globalny obiekt `window.gra`. Dzięki niemu możesz wpisywać w konsoli przeglądarki komendy zaczynające się od słowa `gra.` (np. `gra.idz("prawo")`).
+
+```javascript
+window.gra = {
+
+```
+
+#### Komenda `start()`
+
+```javascript
+  start: function() {
+    stan = stanPoczatkowy();
+    console.log("Start gry! Zasilanie: 10 tur.");
+    pomoc();
+    rozejrzyj();
+  },
+
+```
+
+* **Co robi:** Resetuje grę – tworzy nowy stan początkowy, wypisuje powitanie, uruchamia instrukcję `pomoc()` oraz rozgląda się po pierwszym pokoju.
+
+#### Komenda `status()`, `mapa()`, `rozejrzyj()`, `pomoc()`
+
+```javascript
+  status: function() { status(); },
+  mapa: function() { mapa(); },
+  rozejrzyj: function() { rozejrzyj(); },
+  pomoc: function() { pomoc(); },
+
+```
+
+* **Co robią:** Są to tzw. „funkcje owijające” (wrapper functions). Po prostu wywołują odpowiednie funkcje widoki zdefiniowane wyżej w pliku, kiedy wpiszesz je w konsoli przez obiekt `gra`.
+
+#### Komenda `idz(kierunek)`
+
+```javascript
+  idz: function(kierunek) {
+    let wynik = przejscie(stan, kierunek);
+    stan = wynik.stan;
+    console.log(wynik.komunikat);
+    if (stan.koniec === false && stan.wygrana === false) {
+      rozejrzyj();
+    }
+  },
+
+```
+
+* **Co robi:**
+1. Wysyła kierunek ruchu do silnika za pomocą funkcji `przejscie(stan, kierunek)`.
+2. Silnik zwraca nam wynik w postaci obiektu `{ stan, komunikat }`.
+3. Podmieniamy stary stan na nowy (`stan = wynik.stan`).
+4. Wypisujemy w konsoli komunikat zwrócony przez silnik (np. informację o przejściu do nowego pokoju lub o ścianie).
+5. Jeśli gra się jeszcze nie skończyła, automatycznie wywołujemy `rozejrzyj()`, żeby gracz wiedział, gdzie trafił.
+
+
+
+#### Komenda `akcja(co)`
+
+```javascript
+  akcja: function(co) {
+    let wynik = przejscie(stan, co);
+    stan = wynik.stan;
+    console.log(wynik.komunikat);
+  },
+
+```
+
+* **Co robi:** Działa dokładnie tak samo jak ruch: wysyła nazwę akcji (np. `"karta"` czy `"napraw"`) do funkcji `przejscie` w silniku, aktualizuje stan gry i wypisuje wynikowy komunikat w konsoli.
+
+#### Komenda `eksportuj()`
+
+```javascript
+  eksportuj: function() {
+    return eksportuj(stan);
+  },
+
+```
+
+* **Co robi:** Wywołuje funkcję `eksportuj(stan)` z silnika, która zamienia aktualny stan gry na tekst JSON, dzięki czemu możesz go skopiować i zapisać.
+
+#### Komenda `importuj(tekst)`
+
+```javascript
+  importuj: function(tekst) {
+    let nowyStan = importuj(tekst);
+    if (nowyStan !== false) {
+      stan = nowyStan;
+      console.log("Sukces! Wczytano stan gry.");
+      status();
+      return true;
+    }
+    return false;
+  }
+};
+
+```
+
+* **Co robi:**
+1. Przekazuje wklejony tekst do funkcji `importuj(tekst)` w silniku (która sprawdza go walidatorem).
+2. Jeśli silnik zwróci poprawny stan (a nie `false`), appka podmienia bieżący `stan` na ten nowy, wypisuje komunikat o sukcesie i pokazuje aktualny `status()`.
+
+
+
+---
+
+### 4. Automatyczny start gry
+
+```javascript
+window.gra.start();
+
+```
+
+* **Co robi:** Ta ostatnia linijka kodu uruchamia się automatycznie w momencie, gdy otworzysz stronę w przeglądarce i załadują się skrypty. Wywołuje `window.gra.start()`, dzięki czemu gra od razu startuje i od razu widzisz powitanie w konsoli bez konieczności wpisywania polecenia ręcznie.

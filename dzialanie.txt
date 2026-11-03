@@ -1,0 +1,233 @@
+Oto dokładne, linijka po linijce wyjaśnienie całego pliku **`engine.js`**. Ten plik jest „mózgiem” naszej gry – zajmuje się wyłącznie obliczeniami, regułami i sprawdzaniem poprawności danych, nie wyświetlając niczego bezpośrednio w konsoli.
+
+---
+
+### 1. Stałe i kolekcja pokojów
+
+```javascript
+const MAKS_ENERGIA = 10;
+const AKTUALNA_WERSJA = 1;
+
+const POKOJE = [
+  { id: 1, nazwa: "Recepcja" },
+  { id: 2, nazwa: "Magazyn" },
+  { id: 3, nazwa: "Serwerownia" },
+  { id: 4, nazwa: "Wyjście" }
+];
+
+```
+
+* **`const MAKS_ENERGIA = 10;`** – Tworzy stałą (zmienną, której wartość się nie zmienia) oznaczającą maksymalną liczbę punktów ruchu (energii) na starcie gry.
+* **`const AKTUALNA_WERSJA = 1;`** – Numer wersji zapisu gry. Jest potrzebny po to, aby gra wiedziała, czy wczytywany plik zapisu pasuje do aktualnej wersji kodu.
+* **`const POKOJE = [...]`** – Tworzy listę (tablicę) obiektów, z których każdy ma swój unikalny numer (`id`) oraz tekstową nazwę (`nazwa`). Dzięki temu wiemy, pod jakim numeremkryje się np. *"Recepcja"* czy *"Wyjście"*.
+
+---
+
+### 2. Fabryka stanu początkowego
+
+```javascript
+function stanPoczatkowy() {
+  return {
+    pokoj: 1,
+    energia: MAKS_ENERGIA,
+    karta: false,
+    bezpiecznik: false,
+    zasilanie: false,
+    koniec: false,
+    wygrana: false
+  };
+}
+
+```
+
+* **`function stanPoczatkowy()`** – Funkcja fabryczna. Za każdym razem, gdy ją wywołasz, tworzy i zwraca zupełnie nowy, świeży obiekt zawierający początkowe ustawienia gry (gracz jest w pokoju 1, ma 10 energii, nie ma żadnych przedmiotów, a gra się nie skończyła). Zwracanie nowego obiektu (a nie modyfikowanie jednego wspólnego) zapewnia, że stany różnych rozgrywek się nie mieszają.
+
+---
+
+### 3. Walidator stanu (`czyStan`)
+
+```javascript
+function czyStan(wartosc) {
+  if (wartosc === null || typeof wartosc !== "object" || Array.isArray(wartosc)) {
+    return false;
+  }
+  if (!Number.isInteger(wartosc.pokoj) || wartosc.pokoj < 1 || wartosc.pokoj > 4) {
+    return false;
+  }
+  if (!Number.isInteger(wartosc.energia) || wartosc.energia < 0 || wartosc.energia > MAKS_ENERGIA) {
+    return false;
+  }
+  if (typeof wartosc.karta !== "boolean" ||
+      typeof wartosc.bezpiecznik !== "boolean" ||
+      typeof wartosc.zasilanie !== "boolean" ||
+      typeof wartosc.koniec !== "boolean" ||
+      typeof wartosc.wygrana !== "boolean") {
+    return false;
+  }
+  return true;
+}
+
+```
+
+* **`function czyStan(wartosc)`** – Strażnik poprawności danych (walidator). Sprawdza, czy podany obiekt (np. wczytany z pliku zapisu) jest bezpieczny i poprawny.
+* *Pierwszy warunek:* Sprawdza, czy wartość nie jest pusta (`null`), czy jest obiektem i czy nie jest tablicą. Jeśli coś jest nie tak, zwraca `false` (odrzuca).
+* *Drugi warunek:* Sprawdza, czy numer pokoju (`pokoj`) jest liczbą całkowitą mieszczącą się w zakresie od 1 do 4.
+* *Trzeci warunek:* Sprawdza, czy energia jest liczbą całkowitą mieszczącą się w przedziale od 0 do 10.
+* *Czwarty warunek:* Sprawdza, czy wszystkie pola stanowiące przedmioty i flagi gry (`karta`, `bezpiecznik`, `zasilanie`, `koniec`, `wygrana`) mają typ logiczny (`true` lub `false`).
+* Jeśli wszystko jest w porządku, funkcja zwraca `true`.
+
+
+
+---
+
+### 4. Funkcja pomocnicza: Nazwa pokoju
+
+```javascript
+function nazwaPokoju(numer) {
+  let i = 0;
+  while (i < POKOJE.length) {
+    if (POKOJE[i].id === numer) {
+      return POKOJE[i].nazwa;
+    }
+    i++;
+  }
+  return "Nieznane pomieszczenie";
+}
+
+```
+
+* **`function nazwaPokoju(numer)`** – Służy do zamiany cyfry (np. `2`) na tekst (np. `"Magazyn"`).
+* Przechodzi pętlą `while` przez tablicę `POKOJE`. Gdy znajdzie obiekt, którego `id` zgadza się z podanym numerem, zwraca jego `nazwa`. Jeśli nie znajdzie, zwraca `"Nieznane pomieszczenie"`.
+
+---
+
+### 5. Serce silnika: Funkcja `przejscie`
+
+```javascript
+function przejscie(stanPrzed, komenda) {
+  let s = {
+    pokoj: stanPrzed.pokoj,
+    energia: stanPrzed.energia,
+    karta: stanPrzed.karta,
+    bezpiecznik: stanPrzed.bezpiecznik,
+    zasilanie: stanPrzed.zasilanie,
+    koniec: stanPrzed.koniec,
+    wygrana: stanPrzed.wygrana
+  };
+
+```
+
+* **`function przejscie(stanPrzed, komenda)`** – Przyjmuje obecny stan gry (`stanPrzed`) oraz wpisaną komendę (np. `"lewo"`, `"karta"`).
+* Na samym początku tworzy **nowy obiekt kopii `s**`, kopiując do niego wszystkie pola ze starego stanu. Dzięki temu silnik **nie niszczy ani nie zmienia bezpośrednio** starych danych, dopóki ruch nie zostanie w pełni zatwierdzony.
+
+```javascript
+  if (s.koniec === true) {
+    return { stan: stanPrzed, komunikat: "Gra dobiegła końca." };
+  }
+
+```
+
+* Jeśli gra już się skończyła (`koniec === true`), funkcja od razu zwraca stary stan i informację, że nie można już wykonywać ruchu.
+
+#### Obsługa ruchu (`lewo` / `prawo`):
+
+```javascript
+  if (komenda === "lewo" || komenda === "prawo") {
+    let nowyPokoj = s.pokoj;
+    if (komenda === "prawo") {
+      nowyPokoj = s.pokoj + 1;
+    } else {
+      nowyPokoj = s.pokoj - 1;
+    }
+
+    if (nowyPokoj < 1 || nowyPokoj > 4) {
+      return { stan: stanPrzed, komunikat: "Ściana! Nie możesz tam pójść." };
+    }
+
+    s.pokoj = nowyPokoj;
+    s.energia = s.energia - 1;
+
+    if (s.energia === 0) {
+      s.koniec = true;
+      return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Zabrakło energii - PRZEGRANA!" };
+    }
+
+    return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Pozostała energia: " + s.energia };
+  }
+
+```
+
+* Sprawdza, czy gracz chce iść w lewo czy w prawo, oblicza numer nowego pokoju.
+* Jeśli nowy pokój wykracza poza zakres 1–4 (np. próbujesz wyjść w lewo z Recepcji, czyli pokoju 1), gra uznaje to za **ścianę**, zwraca stary stan i odpowiedni komunikat (bez zużywania energii!).
+* Jeśli ruch jest poprawny, zmienia pokój w kopii stanu (`s.pokoj`), odejmuje 1 punkt energii (`s.energia = s.energia - 1`) i sprawdza, czy energia nie spadła do zera (co oznaczałoby przegraną). Na koniec zwraca nowy stan i komunikat.
+
+#### Obsługa akcji z przedmiotami (`karta`, `bezpiecznik`, `napraw`, `wyjdz`):
+
+```javascript
+  if (komenda === "karta") {
+    if (s.pokoj !== 1 || s.karta === true) {
+      return { stan: stanPrzed, komunikat: "Nie ma tu karty lub już ją masz." };
+    }
+    s.karta = true;
+    s.energia = s.energia - 1;
+    let komunikat = "Podnosisz kartę dostępu.";
+    if (s.energia === 0) {
+      s.koniec = true;
+      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
+    }
+    return { stan: s, komunikat: komunikat };
+  }
+
+```
+
+* Działa na dokładnie tej samej zasadzie: sprawdza warunki (np. czy jesteś w pokoju 1 i czy nie masz jeszcze karty). Jeśli warunek jest spełniony, zmienia stan (`s.karta = true`), odejmuje energię i zwraca wynik. Podobnie sprawdzane są pozostałe komendy (`bezpiecznik`, `napraw`, `wyjdz`).
+
+---
+
+### 6. Eksport i Import zapisu gry
+
+```javascript
+function eksportuj(stan) {
+  let pakiet = { wersja: AKTUALNA_WERSJA, stan: stan };
+  return JSON.stringify(pakiet);
+}
+
+```
+
+* **`eksportuj(stan)`** – Pakuje aktualną wersję oraz stan gry w jeden wspólny obiekt (`pakiet`), a następnie zamienia go na zwykły tekst za pomocą funkcji `JSON.stringify()`, żeby gracz mógł go skopiować do pliku `postep.json`.
+
+```javascript
+function importuj(tekst) {
+  if (typeof tekst !== "string" || tekst === "") {
+    console.log("Odmowa: niepoprawny format lub pusty tekst.");
+    return false;
+  }
+  try {
+    let kandydat = JSON.parse(tekst);
+    if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
+      console.log("Odmowa: błędna struktura pakietu.");
+      return false;
+    }
+    if (kandydat.wersja !== AKTUALNA_WERSJA) {
+      console.log("Odmowa: nieobsługiwana wersja zapisu.");
+      return false;
+    }
+    if (!czyStan(kandydat.stan)) {
+      console.log("Odmowa: stan nie przeszedł walidacji.");
+      return false;
+    }
+    return kandydat.stan;
+  } catch (e) {
+    console.log("Odmowa: błąd parsowania JSON.");
+    return false;
+  }
+}
+
+```
+
+* **`importuj(tekst)`** – Służy do wczytywania zapisu:
+1. Sprawdza, czy podany argument jest niepustym tekstem.
+2. Używa bloku `try...catch` i `JSON.parse()`, aby zamienić tekst z powrotem na obiekt JavaScript (a w razie błędu składni JSON – bezpiecznie go złapać i odrzucić, zamiast wywracać grę).
+3. Sprawdza, czy wersja pakietu zgadza się z `AKTUALNA_WERSJA`.
+4. Przepuszcza wczytany stan przez nasz walidator `czyStan()`.
+5. Jeśli wszystko jest idealne, zwraca wczytany stan gry. W przeciwnym razie odrzuca zapis i zwraca `false`, pozostawiając dotychczasową grę naruszoną.
