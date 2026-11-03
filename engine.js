@@ -1,4 +1,12 @@
 const MAKS_ENERGIA = 10;
+const AKTUALNA_WERSJA = 1;
+
+const POKOJE = [
+  { id: 1, nazwa: "Recepcja" },
+  { id: 2, nazwa: "Magazyn" },
+  { id: 3, nazwa: "Serwerownia" },
+  { id: 4, nazwa: "Wyjście" }
+];
 
 function stanPoczatkowy() {
   return {
@@ -12,130 +20,157 @@ function stanPoczatkowy() {
   };
 }
 
-function start(stan) {
-  stan.pokoj = 1;
-  stan.energia = MAKS_ENERGIA;
-  stan.karta = false;
-  stan.bezpiecznik = false;
-  stan.zasilanie = false;
-  stan.koniec = false;
-  stan.wygrana = false;
-  console.log("Start gry! Wpisz gra.pomoc()");
-  rozejrzyj(stan);
-  return stan;
-}
-
-function zakonczTure(stan) {
-  stan.energia = stan.energia - 1;
-  console.log("Pozostała energia: " + stan.energia);
-  if (stan.wygrana) {
-    console.log("WYGRANA!");
-  } else if (stan.energia === 0) {
-    stan.koniec = true;
-    console.log("PRZEGRANA! Wpisz gra.start()");
+function czyStan(wartosc) {
+  if (wartosc === null || typeof wartosc !== "object" || Array.isArray(wartosc)) {
+    return false;
   }
+  if (!Number.isInteger(wartosc.pokoj) || wartosc.pokoj < 1 || wartosc.pokoj > 4) {
+    return false;
+  }
+  if (!Number.isInteger(wartosc.energia) || wartosc.energia < 0 || wartosc.energia > MAKS_ENERGIA) {
+    return false;
+  }
+  if (typeof wartosc.karta !== "boolean" ||
+      typeof wartosc.bezpiecznik !== "boolean" ||
+      typeof wartosc.zasilanie !== "boolean" ||
+      typeof wartosc.koniec !== "boolean" ||
+      typeof wartosc.wygrana !== "boolean") {
+    return false;
+  }
+  return true;
 }
 
-function pomoc() {
-  console.log("Dostępne komendy: gra.start(), gra.status(), gra.mapa(), gra.rozejrzyj(), gra.idz('lewo'), gra.idz('prawo'), gra.akcja('karta'), gra.akcja('bezpiecznik'), gra.akcja('napraw'), gra.akcja('wyjdz')");
+function nazwaPokoju(numer) {
+  let i = 0;
+  while (i < POKOJE.length) {
+    if (POKOJE[i].id === numer) {
+      return POKOJE[i].nazwa;
+    }
+    i++;
+  }
+  return "Nieznane pomieszczenie";
 }
 
-function status(stan) {
-  console.log("Pokój: " + stan.pokoj);
-  console.log("Energia: " + stan.energia);
-  console.log("Karta: " + stan.kartera ? "tak" : "nie");
-  console.log("Bezpiecznik: " + stan.bezpiecznik);
-  console.log("Zasilanie: " + stan.zasilanie);
-}
+function przejscie(stanPrzed, komenda) {
+  let s = {
+    pokoj: stanPrzed.pokoj,
+    energia: stanPrzed.energia,
+    karta: stanPrzed.karta,
+    bezpiecznik: stanPrzed.bezpiecznik,
+    zasilanie: stanPrzed.zasilanie,
+    koniec: stanPrzed.koniec,
+    wygrana: stanPrzed.wygrana
+  };
 
-function mapa(stan) {
-  for (let i = 1; i <= 4; i++) {
-    if (i === stan.pokoj) {
-      console.log(i + " [tu jesteś]");
+  if (s.koniec === true) {
+    return { stan: stanPrzed, komunikat: "Gra dobiegła końca." };
+  }
+
+  if (komenda === "lewo" || komenda === "prawo") {
+    let nowyPokoj = s.pokoj;
+    if (komenda === "prawo") {
+      nowyPokoj = s.pokoj + 1;
     } else {
-      console.log(i);
+      nowyPokoj = s.pokoj - 1;
     }
+
+    if (nowyPokoj < 1 || nowyPokoj > 4) {
+      return { stan: stanPrzed, komunikat: "Ściana! Nie możesz tam pójść." };
+    }
+
+    s.pokoj = nowyPokoj;
+    s.energia = s.energia - 1;
+
+    if (s.energia === 0) {
+      s.koniec = true;
+      return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Zabrakło energii - PRZEGRANA!" };
+    }
+
+    return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Pozostała energia: " + s.energia };
   }
+
+  if (komenda === "karta") {
+    if (s.pokoj !== 1 || s.karta === true) {
+      return { stan: stanPrzed, komunikat: "Nie ma tu karty lub już ją masz." };
+    }
+    s.karta = true;
+    s.energia = s.energia - 1;
+    let komunikat = "Podnosisz kartę dostępu.";
+    if (s.energia === 0) {
+      s.koniec = true;
+      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
+    }
+    return { stan: s, komunikat: komunikat };
+  }
+
+  if (komenda === "bezpiecznik") {
+    if (s.pokoj !== 2 || s.bezpiecznik === true || s.zasilanie === true) {
+      return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika w tym miejscu." };
+    }
+    s.bezpiecznik = true;
+    s.energia = s.energia - 1;
+    let komunikat = "Podnosisz zapasowy bezpiecznik.";
+    if (s.energia === 0) {
+      s.koniec = true;
+      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
+    }
+    return { stan: s, komunikat: komunikat };
+  }
+
+  if (komenda === "napraw") {
+    if (s.pokoj !== 3 || s.bezpiecznik === false || s.zasilanie === true) {
+      return { stan: stanPrzed, komunikat: "Nie możesz tutaj naprawić zasilania." };
+    }
+    s.bezpiecznik = false;
+    s.zasilanie = true;
+    s.energia = s.energia - 1;
+    let komunikat = "Montujesz bezpiecznik i przywracasz zasilanie!";
+    if (s.energia === 0) {
+      s.koniec = true;
+      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
+    }
+    return { stan: s, komunikat: komunikat };
+  }
+
+  if (komenda === "wyjdz") {
+    if (s.pokoj !== 4 || s.karta === false || s.zasilanie === false) {
+      return { stan: stanPrzed, komunikat: "Drzwi są zamknięte. Potrzebujesz karty i aktywnego zasilania." };
+    }
+    s.wygrana = true;
+    s.koniec = true;
+    return { stan: s, komunikat: "WYGRANA! Otwierasz drzwi i uciekasz z serwerowni!" };
+  }
+
+  return { stan: stanPrzed, komunikat: "Nieznana komenda." };
 }
 
-function rozejrzyj(stan) {
-  if (stan.pokoj === 1) {
-    console.log("Jesteś w Recepcji. Leży tu karta.");
-  } else if (stan.pokoj === 2) {
-    console.log("Jesteś w Magazynie. Leży tu bezpiecznik.");
-  } else if (stan.pokoj === 3) {
-    console.log("Jesteś w Serwerowni.");
-  } else if (stan.pokoj === 4) {
-    console.log("Jesteś przy Wyjściu.");
-  }
+function eksportuj(stan) {
+  let pakiet = { wersja: AKTUALNA_WERSJA, stan: stan };
+  return JSON.stringify(pakiet);
 }
 
-function idz(stan, kierunek) {
-  if (stan.koniec) {
-    console.log("Gra się skończyła.");
-    return;
+function importuj(tekst) {
+  if (typeof tekst !== "string" || tekst === "") {
+    console.log("Odmowa: niepoprawny format lub pusty tekst.");
+    return false;
   }
-
-  let nowyPokoj = stan.pokoj;
-  if (kierunek === "prawo") {
-    nowyPokoj = stan.pokoj + 1;
-  } else if (kierunek === "lewo") {
-    nowyPokoj = stan.pokoj - 1;
-  } else {
-    console.log("Użyj 'lewo' lub 'prawo'.");
-    return;
-  }
-
-  if (nowyPokoj < 1 || nowyPokoj > 4) {
-    console.log("Ściana!");
-    return;
-  }
-
-  stan.pokoj = nowyPokoj;
-  rozejrzyj(stan);
-  zakonczTure(stan);
-}
-
-function akcja(stan, co) {
-  if (stan.koniec) {
-    console.log("Gra się skończyła.");
-    return;
-  }
-
-  if (co === "karta") {
-    if (stan.pokoj !== 1 || stan.karta) {
-      console.log("Nie można tego zrobić.");
-      return;
+  try {
+    let kandydat = JSON.parse(tekst);
+    if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
+      console.log("Odmowa: błędna struktura pakietu.");
+      return false;
     }
-    stan.karta = true;
-    console.log("Podniesiono kartę.");
-  } else if (co === "bezpiecznik") {
-    if (stan.pokoj !== 2 || stan.bezpiecznik || stan.zasilanie) {
-      console.log("Nie można tego zrobić.");
-      return;
+    if (kandydat.wersja !== AKTUALNA_WERSJA) {
+      console.log("Odmowa: nieobsługiwana wersja zapisu.");
+      return false;
     }
-    stan.bezpiecznik = true;
-    console.log("Podniesiono bezpiecznik.");
-  } else if (co === "napraw") {
-    if (stan.pokoj !== 3 || !stan.bezpiecznik || stan.zasilanie) {
-      console.log("Nie można tego zrobić.");
-      return;
+    if (!czyStan(kandydat.stan)) {
+      console.log("Odmowa: stan nie przeszedł walidacji.");
+      return false;
     }
-    stan.bezpiecznik = false;
-    stan.zasilanie = true;
-    console.log("Naprawiono zasilanie.");
-  } else if (co === "wyjdz") {
-    if (stan.pokoj !== 4 || !stan.karta || !stan.zasilanie) {
-      console.log("Nie można tego zrobić.");
-      return;
-    }
-    stan.wygrana = true;
-    stan.koniec = true;
-    console.log("Otwarto drzwi!");
-  } else {
-    console.log("Nieznana akcja.");
-    return;
+    return kandydat.stan;
+  } catch (e) {
+    console.log("Odmowa: błąd parsowania JSON.");
+    return false;
   }
-
-  zakonczTure(stan);
 }
