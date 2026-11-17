@@ -1,30 +1,53 @@
 const START_ENERGIA = 10;
 const MAKS_ENERGIA = 100;
+const AKTUALNA_WERSJA = 1;
 
-// Kolekcja pokojów
+// Kolekcja pomieszczeń (1-4 główny korytarz, 5 sekretne laboratorium)
 const pokoje = [
   { id: 1, nazwa: "Recepcja", opis: "Na biurku leży plastikowa karta dostępu. Stoi tu również stary automat do gier z napisem: 'Zagraj za 1 Energię!'." },
   { id: 2, nazwa: "Magazyn", opis: "Na półce leży zapasowy bezpiecznik." },
-  { id: 3, nazwa: "Serwerownia", opis: "Pomieszczenie z głównymi szafami serwerowymi." },
-  { id: 4, nazwa: "Wyjscie", opis: "Drzwi prowadzące na wolność." }
+  { id: 3, nazwa: "Serwerownia", opis: "Pomieszczenie z głównymi szafami serwerowymi. W ścianie zauważasz ukryte, zamknięte drzwi na [sekret]." },
+  { id: 4, nazwa: "Wyjście", opis: "Drzwi prowadzące na wolność." },
+  { id: 5, nazwa: "Tajne Laboratorium", opis: "Wokół unosi się zapach ozonu. Na ścianie miga stary terminal badawczy." }
 ];
 
-// Fabryka stanu początkowego (zwraca niezależny obiekt)
+function nazwaPokoju(numer) {
+  const p = pokoje.find(x => x.id === numer);
+  return p ? p.nazwa : "Nieznane pomieszczenie";
+}
+
+// Fabryka stanu początkowego
 function stanPoczatkowy() {
   return {
     pokoj: 1,
     energia: START_ENERGIA,
+    maksEnergia: MAKS_ENERGIA,
     karta: false,
     bezpiecznik: false,
     zasilanie: false,
     koniec: false,
     wygrana: false,
-    kodSecretu: false
+    kod_secret: false,
+    rzadki_item: false
   };
 }
 
-function pobierzPokoj(id) {
-  return pokoje.find(p => p.id === id);
+// Walidator stanu
+function czyStan(kandydat) {
+  if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
+    return false;
+  }
+  if (!Number.isInteger(kandydat.pokoj) || kandydat.pokoj < 1 || kandydat.pokoj > 5) return false;
+  if (!Number.isInteger(kandydat.maksEnergia) || kandydat.maksEnergia < 10 || kandydat.maksEnergia > 105) return false;
+  if (!Number.isInteger(kandydat.energia) || kandydat.energia < 0 || kandydat.energia > kandydat.maksEnergia) return false;
+  if (typeof kandydat.karta !== "boolean") return false;
+  if (typeof kandydat.bezpiecznik !== "boolean") return false;
+  if (typeof kandydat.zasilanie !== "boolean") return false;
+  if (typeof kandydat.koniec !== "boolean") return false;
+  if (typeof kandydat.wygrana !== "boolean") return false;
+  if (typeof kandydat.kod_secret !== "boolean") return false;
+  if (typeof kandydat.rzadki_item !== "boolean") return false;
+  return true;
 }
 
 // Czysta funkcja przejścia (reguły gry)
@@ -37,23 +60,26 @@ function przejscie(stanPrzed, komenda) {
   let udane = false;
   let komunikat = "";
 
-  // Obsługa ruchu
+  // Obsługa ruchu po korytarzu
   if (komenda === "lewo" || komenda === "prawo") {
+    if (nowyStan.pokoj === 5) {
+      return { stan: stanPrzed, komunikat: "Jesteś w sekretnym pokoju. Użyj komendy 'wroc', aby wrócić do Serwerowni." };
+    }
+
     let nastepnyPokoj = nowyStan.pokoj + (komenda === "prawo" ? 1 : -1);
     if (nastepnyPokoj < 1 || nastepnyPokoj > 4) {
-      return { stan: stanPrzed, komunikat: "Nie możesz iść w tę stronę — napotykasz ścianę." };
+      return { stan: stanPrzed, komunikat: "Ściana! Nie możesz tam pójść." };
     }
     nowyStan.pokoj = nastepnyPokoj;
     udane = true;
-    const p = pobierzPokoj(nastepnyPokoj);
+    const p = pokoje.find(x => x.id === nastepnyPokoj);
     komunikat = "Idziesz do: " + p.nazwa + ". " + p.opis;
   } 
-  // Obsługa akcji
   else {
     switch (komenda) {
       case "karta":
         if (nowyStan.pokoj !== 1 || nowyStan.karta) {
-          return { stan: stanPrzed, komunikat: "Tutaj nie ma karty lub już ją masz." };
+          return { stan: stanPrzed, komunikat: "Nie ma tu karty lub już ją masz." };
         }
         nowyStan.karta = true;
         udane = true;
@@ -62,7 +88,7 @@ function przejscie(stanPrzed, komenda) {
 
       case "bezpiecznik":
         if (nowyStan.pokoj !== 2 || nowyStan.bezpiecznik || nowyStan.zasilanie) {
-          return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika." };
+          return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika w tym miejscu." };
         }
         nowyStan.bezpiecznik = true;
         udane = true;
@@ -83,77 +109,58 @@ function przejscie(stanPrzed, komenda) {
         if (nowyStan.pokoj !== 1) {
           return { stan: stanPrzed, komunikat: "Nie widzisz tu żadnego automatu." };
         }
-        udane = false; // Wejście w automat NIE kosztuje energii
-        komunikat = "Podchodzisz do gamby. Możesz wpisać gra.akcja(\"zagraj\"), aby spróbować szczęścia lub porażki za 1 Energię.";
+        udane = false;
+        komunikat = "Podchodzisz do automatu. Wpisz gra.akcja(\"zagraj\"), aby spróbować szczęścia za 1 Energię.";
         break;
 
       case "zagraj":
         if (nowyStan.pokoj !== 1) {
           return { stan: stanPrzed, komunikat: "Nie ma tu automatu do gry." };
         }
-        // Sprawdzamy czy gracz ma chociaż 1 energii na zagranie (plus 1 zapasu, bo ruch zabiera energię poniżej)
-        // Lub po prostu sprawdzamy czy energia > 0 przed odliczeniem:
         if (nowyStan.energia <= 0) {
           return { stan: stanPrzed, komunikat: "Nie masz już energii na grę!" };
         }
-
-        udane = true; // Ta akcja kosztuje energię!
+        udane = true;
         
-        // Losujemy nagrodę (np. szansa na odzyskanie energii lub zdobycie czegoś)
         const los = Math.floor(Math.random() * 100) + 1;
         if (los < 25) {
-          // 0% - 25%: -1 energia (strata dodatkowa, czyli w sumie -2 z ruchem, ale oddajemy w opisie)
-          nowyStan.energia = nowyStan.energia - 1;
-          komunikat = "Ojojoj komus tu nie idzie zaraz lose. -1 energia";
-          console.log(los);
+          nowyStan.energia = Math.max(0, nowyStan.energia - 1);
+          komunikat = "Ojojoj komuś tu nie idzie... -1 energia";
         } 
         else if (los < 50) {
-          // 25% - 50% (25% szans): +1 energia
-          nowyStan.energia = nowyStan.energia + 1;
-          komunikat = "Tym razem za zero. +1 energia";
-          console.log(los);
+          nowyStan.energia = Math.min(nowyStan.maksEnergia, nowyStan.energia + 1);
+          komunikat = "Tym razem na czysto. +1 energia";
         } 
         else if (los < 75) {
-          // 50% - 75% (25% szans): +2 energie
-          nowyStan.energia = nowyStan.energia + 2;
-          komunikat = "Szczęśliwy traf! Jednak automat oddaje! +2 energie";
-          console.log(los);
+          nowyStan.energia = Math.min(nowyStan.maksEnergia, nowyStan.energia + 2);
+          komunikat = "Szczęśliwy traf! Automat oddaje! +2 energie";
         } 
         else if (los < 86) {
-          // 90% - 93% (3% szans): +10 energii (pełne odnowienie do maksa)
-          nowyStan.energia = nowyStan.energia - 5;
-          komunikat = "ALE PECHHH co za nie fart. -5 energii";
-          console.log(los);
+          nowyStan.energia = Math.max(0, nowyStan.energia - 5);
+          komunikat = "ALE PECHHH! Co za niefart. -5 energii";
         }
         else if (los < 90) {
-          // 75% - 90% (15% szans): Kod do secretu (5258)
-          nowyStan.kodSecretu = true;
-          komunikat = "??? 5258!";
-          console.log(los);
+          nowyStan.kod_secret = true;
+          komunikat = "??? Otrzymujesz kod do sekretu (5258)!";
         } 
         else if (los < 93) {
-          // 90% - 93% (3% szans): +10 energii (pełne odnowienie do maksa)
-          nowyStan.energia = nowyStan.energia + 10;
-          komunikat = "JACKPOT! MEGA BIG WIN! +10 energii chyba wygraleś chyba ze grasz dalej hehe";
-          console.log(los);
+          nowyStan.energia = Math.min(nowyStan.maksEnergia, nowyStan.energia + 10);
+          komunikat = "JACKPOT! MEGA BIG WIN! +10 energii!";
         } 
-        else if(los < 99) {
+        else if (los < 99) {
           nowyStan.koniec = true;
-          komunikat = "Wypierdalaj";
-          console.log(los);
+          komunikat = "Automat uległ spięciu i cię poraził. Koniec gry!";
         }
         else {
-          // 1% szans: Bóg hazardu - natychmiastowa wygrana!
           nowyStan.wygrana = true;
           nowyStan.koniec = true;
-          komunikat = "Przepustka do pokoju wygranego. WYGRALES!!!";
-          console.log(los);
+          komunikat = "Bóg hazardu! Trafiasz główną wygraną. WYGRANA!";
         }
         break;
 
       case "wyjdz":
         if (nowyStan.pokoj !== 4 || !nowyStan.karta || !nowyStan.zasilanie) {
-          return { stan: stanPrzed, komunikat: "Nie możesz otworzyć drzwi (wymaga karty i zasilania)." };
+          return { stan: stanPrzed, komunikat: "Drzwi są zamknięte. Potrzebujesz karty i aktywnego zasilania." };
         }
         nowyStan.wygrana = true;
         nowyStan.koniec = true;
@@ -161,57 +168,94 @@ function przejscie(stanPrzed, komenda) {
         komunikat = "Otwierasz drzwi wyjściowe! Wygrana!";
         break;
 
+      case "sekret":
+        if (nowyStan.pokoj !== 3) {
+          return { stan: stanPrzed, komunikat: "Nie widzisz tu tajnego przejścia." };
+        }
+        if (!nowyStan.kod_secret) {
+          return { stan: stanPrzed, komunikat: "Drzwi są zablokowane. Potrzebujesz kodu (zdobędziesz go z automatu)!" };
+        }
+        nowyStan.pokoj = 5;
+        udane = true;
+        komunikat = "Wpisujesz kod i wchodzisz do Tajnego Laboratorium.";
+        break;
+
+      case "terminal":
+        if (nowyStan.pokoj !== 5) {
+          return { stan: stanPrzed, komunikat: "Nie ma tu terminala." };
+        }
+        return { stan: nowyStan, komunikat: "Terminal wyświetla: Artefaktem tego miejsca jest legendarny MEDUSKA KONGO." };
+
+      case "wroc":
+        if (nowyStan.pokoj !== 5) {
+          return { stan: stanPrzed, komunikat: "Nie jesteś w sekretnym pokoju." };
+        }
+        nowyStan.pokoj = 3;
+        udane = true;
+        komunikat = "Wracasz do Serwerowni.";
+        break;
+
+      case "pobierz":
+        if (nowyStan.pokoj !== 5 || nowyStan.rzadki_item) {
+          return { stan: stanPrzed, komunikat: "Nie ma tu nic do podniesienia." };
+        }
+        nowyStan.rzadki_item = true;
+        nowyStan.maksEnergia += 5;
+        nowyStan.energia = Math.min(nowyStan.maksEnergia, nowyStan.energia + 5);
+        udane = true;
+        komunikat = "Podnosisz legendarny MEDUSKA KONGO! Twój maksymalny limit energii wzrósł do " + nowyStan.maksEnergia + ", a ty odzyskujesz +5 energii.";
+        break;
+
       default:
         return { stan: stanPrzed, komunikat: "Nieznana komenda. Wpisz gra.pomoc()." };
     }
   }
 
-  // Rozliczenie energii po udanym działaniu
+  // Rozliczenie kosztu energii za akcję/ruch
   if (udane) {
-    nowyStan.energia = nowyStan.energia - 1;
-    if (nowyStan.wygrana) {
-      // Wygrana ma priorytet
-    } else if (nowyStan.energia <= 0) {
-      nowyStan.koniec = true;
-      komunikat += "\nPRZEGRANA. Zasilanie awaryjne padło.";
-    } else {
-      komunikat += "\nPozostała energia: " + nowyStan.energia;
+    if (!nowyStan.wygrana) {
+      nowyStan.energia = nowyStan.energia - 1;
+      if (nowyStan.energia <= 0) {
+        nowyStan.koniec = true;
+        komunikat += "\nPRZEGRANA. Zabrakło energii!";
+      } else {
+        komunikat += "\nPozostała energia: " + nowyStan.energia;
+      }
     }
   }
 
   return { stan: nowyStan, komunikat };
 }
 
-// Walidator stanu
-function czyStan(kandydat) {
-  if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
-    return false;
-  }
-  if (!Number.isInteger(kandydat.pokoj) || kandydat.pokoj < 1 || kandydat.pokoj > 4) return false;
-  if (!Number.isInteger(kandydat.energia) || kandydat.energia < 0 || kandydat.energia > MAKS_ENERGIA) return false;
-  if (typeof kandydat.karta !== "boolean") return false;
-  if (typeof kandydat.bezpiecznik !== "boolean") return false;
-  if (typeof kandydat.zasilanie !== "boolean") return false;
-  if (typeof kandydat.koniec !== "boolean") return false;
-  if (typeof kandydat.wygrana !== "boolean") return false;
-  if (typeof kandydat.kodSecretu !== "boolean") return false;
-  return true;
-}
-
 // Eksport do JSON
-function eksportujStan(stanAktualny) {
-  const pakiet = { wersja: 1, stan: stanAktualny };
+function eksportuj(stan) {
+  let pakiet = { wersja: AKTUALNA_WERSJA, stan: stan };
   return JSON.stringify(pakiet);
 }
 
 // Import z JSON
-function importujStan(tekst) {
-  if (typeof tekst !== "string" || tekst.trim() === "") {
-    throw new Error("Podany tekst jest pusty lub nie jest ciągiem znaków.");
+function importuj(tekst) {
+  if (typeof tekst !== "string" || tekst === "") {
+    console.log("Odmowa: niepoprawny format lub pusty tekst.");
+    return false;
   }
-  const pakiet = JSON.parse(tekst);
-  if (!pakiet || pakiet.wersja !== 1 || !czyStan(pakiet.stan)) {
-    throw new Error("Niepoprawna struktura pakietu, wersja lub błąd walidacji stanu.");
+  try {
+    let kandydat = JSON.parse(tekst);
+    if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
+      console.log("Odmowa: błędna struktura pakietu.");
+      return false;
+    }
+    if (kandydat.wersja !== AKTUALNA_WERSJA) {
+      console.log("Odmowa: nieobsługiwana wersja zapisu.");
+      return false;
+    }
+    if (!czyStan(kandydat.stan)) {
+      console.log("Odmowa: stan nie przeszedł walidacji.");
+      return false;
+    }
+    return kandydat.stan;
+  } catch (e) {
+    console.log("Odmowa: błąd parsowania JSON.");
+    return false;
   }
-  return pakiet.stan;
 }
