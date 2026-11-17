@@ -2,11 +2,81 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ucieczka z serwerowni 2: Zemsta konsoli</title>
+    <style>
+        body {
+            background-image: url('https://wykop.pl/cdn/c3201142/fd2185bbba9eb4dc88c7edd55d34e5d91078886c516333574f623db3c9604c1a,w800.jpg?author=zloty_wkret&auth=2a11a327ab9dcd4a9c526ce3507b5522');
+            background-size: cover;          
+            background-position: center;    
+            background-repeat: no-repeat;    
+            background-attachment: fixed;    
+
+            background-color: #0d1117;       
+            color: #c9d1d9;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .terminal-box {
+            background-color: rgba(22, 27, 34, 0.9); 
+            border: 2px solid #30363d;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+        }
+
+        h1 {
+            color: #58a6ff;
+            margin-top: 0;
+            font-size: 24px;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+        }
+
+        p {
+            line-height: 1.6;
+        }
+
+        .shortcut {
+            background-color: #21262d;
+            color: #7ee787;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .tip {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #8b949e;
+            border-left: 3px solid #58a6ff;
+            padding-left: 10px;
+        }
+    </style>
 </head>
 <body>
-<h1>Gra tekstowa – konsola</h1>
-<p>Otwórz konsolę deweloperską w przeglądarce (F12 lub Ctrl+Shift+I), aby grać i testować polecenia.</p>
+
+    <div class="terminal-box">
+        <h1>> Ucieczka z serwerowni 2</h1>
+        <p>System operacyjny terminala został uruchomiony. Gra toczy się wewnątrz konsoli deweloperskiej.</p>
+        
+        <p>Aby rozpocząć lub podejrzeć dostępne komendy, otwórz konsolę naciskając <span class="shortcut">F12</span> lub <span class="shortcut">Ctrl + Shift + I</span> (Mac: <span class="shortcut">Cmd + Option + J</span>).</p>
+        
+        <div class="tip">
+            <strong>Wskazówka:</strong> Wpisz w konsoli <span style="color: #7ee787;">pomoc()</span> lub korzystaj z gotowych poleceń obiektu <span style="color: #58a6ff;">gra</span>, np. <span style="color: #7ee787;">gra.rozejrzyj()</span>.
+        </div>
+    </div>
+
+    <!-- Skrypty logiki gry -->
     <script src="./engine.js" defer></script>
     <script src="./app.js" defer></script>
 </body>
