@@ -1,176 +1,217 @@
-const MAKS_ENERGIA = 10;
-const AKTUALNA_WERSJA = 1;
+const START_ENERGIA = 10;
+const MAKS_ENERGIA = 100;
 
-const POKOJE = [
-  { id: 1, nazwa: "Recepcja" },
-  { id: 2, nazwa: "Magazyn" },
-  { id: 3, nazwa: "Serwerownia" },
-  { id: 4, nazwa: "Wyjście" }
+// Kolekcja pokojów
+const pokoje = [
+  { id: 1, nazwa: "Recepcja", opis: "Na biurku leży plastikowa karta dostępu. Stoi tu również stary automat do gier z napisem: 'Zagraj za 1 Energię!'." },
+  { id: 2, nazwa: "Magazyn", opis: "Na półce leży zapasowy bezpiecznik." },
+  { id: 3, nazwa: "Serwerownia", opis: "Pomieszczenie z głównymi szafami serwerowymi." },
+  { id: 4, nazwa: "Wyjscie", opis: "Drzwi prowadzące na wolność." }
 ];
 
+// Fabryka stanu początkowego (zwraca niezależny obiekt)
 function stanPoczatkowy() {
   return {
     pokoj: 1,
-    energia: MAKS_ENERGIA,
+    energia: START_ENERGIA,
     karta: false,
     bezpiecznik: false,
     zasilanie: false,
     koniec: false,
-    wygrana: false
+    wygrana: false,
+    kodSecretu: false
   };
 }
 
-function czyStan(wartosc) {
-  if (wartosc === null || typeof wartosc !== "object" || Array.isArray(wartosc)) {
+function pobierzPokoj(id) {
+  return pokoje.find(p => p.id === id);
+}
+
+// Czysta funkcja przejścia (reguły gry)
+function przejscie(stanPrzed, komenda) {
+  if (stanPrzed.koniec) {
+    return { stan: stanPrzed, komunikat: "Gra dobiegła końca. Wpisz gra.start(), aby zacząć od nowa." };
+  }
+
+  let nowyStan = { ...stanPrzed };
+  let udane = false;
+  let komunikat = "";
+
+  // Obsługa ruchu
+  if (komenda === "lewo" || komenda === "prawo") {
+    let nastepnyPokoj = nowyStan.pokoj + (komenda === "prawo" ? 1 : -1);
+    if (nastepnyPokoj < 1 || nastepnyPokoj > 4) {
+      return { stan: stanPrzed, komunikat: "Nie możesz iść w tę stronę — napotykasz ścianę." };
+    }
+    nowyStan.pokoj = nastepnyPokoj;
+    udane = true;
+    const p = pobierzPokoj(nastepnyPokoj);
+    komunikat = "Idziesz do: " + p.nazwa + ". " + p.opis;
+  } 
+  // Obsługa akcji
+  else {
+    switch (komenda) {
+      case "karta":
+        if (nowyStan.pokoj !== 1 || nowyStan.karta) {
+          return { stan: stanPrzed, komunikat: "Tutaj nie ma karty lub już ją masz." };
+        }
+        nowyStan.karta = true;
+        udane = true;
+        komunikat = "Zabierasz kartę dostępu.";
+        break;
+
+      case "bezpiecznik":
+        if (nowyStan.pokoj !== 2 || nowyStan.bezpiecznik || nowyStan.zasilanie) {
+          return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika." };
+        }
+        nowyStan.bezpiecznik = true;
+        udane = true;
+        komunikat = "Zabierasz zapasowy bezpiecznik.";
+        break;
+
+      case "napraw":
+        if (nowyStan.pokoj !== 3 || !nowyStan.bezpiecznik || nowyStan.zasilanie) {
+          return { stan: stanPrzed, komunikat: "Nie możesz tutaj naprawić zasilania." };
+        }
+        nowyStan.bezpiecznik = false;
+        nowyStan.zasilanie = true;
+        udane = true;
+        komunikat = "Montujesz bezpiecznik i przywracasz zasilanie w serwerowni!";
+        break;
+
+      case "automat":
+        if (nowyStan.pokoj !== 1) {
+          return { stan: stanPrzed, komunikat: "Nie widzisz tu żadnego automatu." };
+        }
+        udane = false; // Wejście w automat NIE kosztuje energii
+        komunikat = "Podchodzisz do gamby. Możesz wpisać gra.akcja(\"zagraj\"), aby spróbować szczęścia lub porażki za 1 Energię.";
+        break;
+
+      case "zagraj":
+        if (nowyStan.pokoj !== 1) {
+          return { stan: stanPrzed, komunikat: "Nie ma tu automatu do gry." };
+        }
+        // Sprawdzamy czy gracz ma chociaż 1 energii na zagranie (plus 1 zapasu, bo ruch zabiera energię poniżej)
+        // Lub po prostu sprawdzamy czy energia > 0 przed odliczeniem:
+        if (nowyStan.energia <= 0) {
+          return { stan: stanPrzed, komunikat: "Nie masz już energii na grę!" };
+        }
+
+        udane = true; // Ta akcja kosztuje energię!
+        
+        // Losujemy nagrodę (np. szansa na odzyskanie energii lub zdobycie czegoś)
+        const los = Math.floor(Math.random() * 100) + 1;
+        if (los < 25) {
+          // 0% - 25%: -1 energia (strata dodatkowa, czyli w sumie -2 z ruchem, ale oddajemy w opisie)
+          nowyStan.energia = nowyStan.energia - 1;
+          komunikat = "Ojojoj komus tu nie idzie zaraz lose. -1 energia";
+          console.log(los);
+        } 
+        else if (los < 50) {
+          // 25% - 50% (25% szans): +1 energia
+          nowyStan.energia = nowyStan.energia + 1;
+          komunikat = "Tym razem za zero. +1 energia";
+          console.log(los);
+        } 
+        else if (los < 75) {
+          // 50% - 75% (25% szans): +2 energie
+          nowyStan.energia = nowyStan.energia + 2;
+          komunikat = "Szczęśliwy traf! Jednak automat oddaje! +2 energie";
+          console.log(los);
+        } 
+        else if (los < 86) {
+          // 90% - 93% (3% szans): +10 energii (pełne odnowienie do maksa)
+          nowyStan.energia = nowyStan.energia - 5;
+          komunikat = "ALE PECHHH co za nie fart. -5 energii";
+          console.log(los);
+        }
+        else if (los < 90) {
+          // 75% - 90% (15% szans): Kod do secretu (5258)
+          nowyStan.kodSecretu = true;
+          komunikat = "??? 5258!";
+          console.log(los);
+        } 
+        else if (los < 93) {
+          // 90% - 93% (3% szans): +10 energii (pełne odnowienie do maksa)
+          nowyStan.energia = nowyStan.energia + 10;
+          komunikat = "JACKPOT! MEGA BIG WIN! +10 energii chyba wygraleś chyba ze grasz dalej hehe";
+          console.log(los);
+        } 
+        else if(los < 99) {
+          nowyStan.koniec = true;
+          komunikat = "Wypierdalaj";
+          console.log(los);
+        }
+        else {
+          // 1% szans: Bóg hazardu - natychmiastowa wygrana!
+          nowyStan.wygrana = true;
+          nowyStan.koniec = true;
+          komunikat = "Przepustka do pokoju wygranego. WYGRALES!!!";
+          console.log(los);
+        }
+        break;
+
+      case "wyjdz":
+        if (nowyStan.pokoj !== 4 || !nowyStan.karta || !nowyStan.zasilanie) {
+          return { stan: stanPrzed, komunikat: "Nie możesz otworzyć drzwi (wymaga karty i zasilania)." };
+        }
+        nowyStan.wygrana = true;
+        nowyStan.koniec = true;
+        udane = true;
+        komunikat = "Otwierasz drzwi wyjściowe! Wygrana!";
+        break;
+
+      default:
+        return { stan: stanPrzed, komunikat: "Nieznana komenda. Wpisz gra.pomoc()." };
+    }
+  }
+
+  // Rozliczenie energii po udanym działaniu
+  if (udane) {
+    nowyStan.energia = nowyStan.energia - 1;
+    if (nowyStan.wygrana) {
+      // Wygrana ma priorytet
+    } else if (nowyStan.energia <= 0) {
+      nowyStan.koniec = true;
+      komunikat += "\nPRZEGRANA. Zasilanie awaryjne padło.";
+    } else {
+      komunikat += "\nPozostała energia: " + nowyStan.energia;
+    }
+  }
+
+  return { stan: nowyStan, komunikat };
+}
+
+// Walidator stanu
+function czyStan(kandydat) {
+  if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
     return false;
   }
-  if (!Number.isInteger(wartosc.pokoj) || wartosc.pokoj < 1 || wartosc.pokoj > 4) {
-    return false;
-  }
-  if (!Number.isInteger(wartosc.energia) || wartosc.energia < 0 || wartosc.energia > MAKS_ENERGIA) {
-    return false;
-  }
-  if (typeof wartosc.karta !== "boolean" ||
-      typeof wartosc.bezpiecznik !== "boolean" ||
-      typeof wartosc.zasilanie !== "boolean" ||
-      typeof wartosc.koniec !== "boolean" ||
-      typeof wartosc.wygrana !== "boolean") {
-    return false;
-  }
+  if (!Number.isInteger(kandydat.pokoj) || kandydat.pokoj < 1 || kandydat.pokoj > 4) return false;
+  if (!Number.isInteger(kandydat.energia) || kandydat.energia < 0 || kandydat.energia > MAKS_ENERGIA) return false;
+  if (typeof kandydat.karta !== "boolean") return false;
+  if (typeof kandydat.bezpiecznik !== "boolean") return false;
+  if (typeof kandydat.zasilanie !== "boolean") return false;
+  if (typeof kandydat.koniec !== "boolean") return false;
+  if (typeof kandydat.wygrana !== "boolean") return false;
+  if (typeof kandydat.kodSecretu !== "boolean") return false;
   return true;
 }
 
-function nazwaPokoju(numer) {
-  let i = 0;
-  while (i < POKOJE.length) {
-    if (POKOJE[i].id === numer) {
-      return POKOJE[i].nazwa;
-    }
-    i++;
-  }
-  return "Nieznane pomieszczenie";
-}
-
-function przejscie(stanPrzed, komenda) {
-  let s = {
-    pokoj: stanPrzed.pokoj,
-    energia: stanPrzed.energia,
-    karta: stanPrzed.karta,
-    bezpiecznik: stanPrzed.bezpiecznik,
-    zasilanie: stanPrzed.zasilanie,
-    koniec: stanPrzed.koniec,
-    wygrana: stanPrzed.wygrana
-  };
-
-  if (s.koniec === true) {
-    return { stan: stanPrzed, komunikat: "Gra dobiegła końca." };
-  }
-
-  if (komenda === "lewo" || komenda === "prawo") {
-    let nowyPokoj = s.pokoj;
-    if (komenda === "prawo") {
-      nowyPokoj = s.pokoj + 1;
-    } else {
-      nowyPokoj = s.pokoj - 1;
-    }
-
-    if (nowyPokoj < 1 || nowyPokoj > 4) {
-      return { stan: stanPrzed, komunikat: "Ściana! Nie możesz tam pójść." };
-    }
-
-    s.pokoj = nowyPokoj;
-    s.energia = s.energia - 1;
-
-    if (s.energia === 0) {
-      s.koniec = true;
-      return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Zabrakło energii - PRZEGRANA!" };
-    }
-
-    return { stan: s, komunikat: "Przechodzisz do: " + nazwaPokoju(s.pokoj) + ". Pozostała energia: " + s.energia };
-  }
-
-  if (komenda === "karta") {
-    if (s.pokoj !== 1 || s.karta === true) {
-      return { stan: stanPrzed, komunikat: "Nie ma tu karty lub już ją masz." };
-    }
-    s.karta = true;
-    s.energia = s.energia - 1;
-    let komunikat = "Podnosisz kartę dostępu.";
-    if (s.energia === 0) {
-      s.koniec = true;
-      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
-    }
-    return { stan: s, komunikat: komunikat };
-  }
-
-  if (komenda === "bezpiecznik") {
-    if (s.pokoj !== 2 || s.bezpiecznik === true || s.zasilanie === true) {
-      return { stan: stanPrzed, komunikat: "Nie możesz podnieść bezpiecznika w tym miejscu." };
-    }
-    s.bezpiecznik = true;
-    s.energia = s.energia - 1;
-    let komunikat = "Podnosisz zapasowy bezpiecznik.";
-    if (s.energia === 0) {
-      s.koniec = true;
-      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
-    }
-    return { stan: s, komunikat: komunikat };
-  }
-
-  if (komenda === "napraw") {
-    if (s.pokoj !== 3 || s.bezpiecznik === false || s.zasilanie === true) {
-      return { stan: stanPrzed, komunikat: "Nie możesz tutaj naprawić zasilania." };
-    }
-    s.bezpiecznik = false;
-    s.zasilanie = true;
-    s.energia = s.energia - 1;
-    let komunikat = "Montujesz bezpiecznik i przywracasz zasilanie!";
-    if (s.energia === 0) {
-      s.koniec = true;
-      komunikat = komunikat + " Zabrakło energii - PRZEGRANA!";
-    }
-    return { stan: s, komunikat: komunikat };
-  }
-
-  if (komenda === "wyjdz") {
-    if (s.pokoj !== 4 || s.karta === false || s.zasilanie === false) {
-      return { stan: stanPrzed, komunikat: "Drzwi są zamknięte. Potrzebujesz karty i aktywnego zasilania." };
-    }
-    s.wygrana = true;
-    s.koniec = true;
-    return { stan: s, komunikat: "WYGRANA! Otwierasz drzwi i uciekasz z serwerowni!" };
-  }
-
-  return { stan: stanPrzed, komunikat: "Nieznana komenda." };
-}
-
-function eksportuj(stan) {
-  let pakiet = { wersja: AKTUALNA_WERSJA, stan: stan };
+// Eksport do JSON
+function eksportujStan(stanAktualny) {
+  const pakiet = { wersja: 1, stan: stanAktualny };
   return JSON.stringify(pakiet);
 }
 
-function importuj(tekst) {
-  if (typeof tekst !== "string" || tekst === "") {
-    console.log("Odmowa: niepoprawny format lub pusty tekst.");
-    return false;
+// Import z JSON
+function importujStan(tekst) {
+  if (typeof tekst !== "string" || tekst.trim() === "") {
+    throw new Error("Podany tekst jest pusty lub nie jest ciągiem znaków.");
   }
-  try {
-    let kandydat = JSON.parse(tekst);
-    if (kandydat === null || typeof kandydat !== "object" || Array.isArray(kandydat)) {
-      console.log("Odmowa: błędna struktura pakietu.");
-      return false;
-    }
-    if (kandydat.wersja !== AKTUALNA_WERSJA) {
-      console.log("Odmowa: nieobsługiwana wersja zapisu.");
-      return false;
-    }
-    if (!czyStan(kandydat.stan)) {
-      console.log("Odmowa: stan nie przeszedł walidacji.");
-      return false;
-    }
-    return kandydat.stan;
-  } catch (e) {
-    console.log("Odmowa: błąd parsowania JSON.");
-    return false;
+  const pakiet = JSON.parse(tekst);
+  if (!pakiet || pakiet.wersja !== 1 || !czyStan(pakiet.stan)) {
+    throw new Error("Niepoprawna struktura pakietu, wersja lub błąd walidacji stanu.");
   }
+  return pakiet.stan;
 }

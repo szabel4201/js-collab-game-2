@@ -1,109 +1,104 @@
 let stan = stanPoczatkowy();
 
+function start() {
+  stan = stanPoczatkowy();
+  console.log("UCIECZKA Z SERWEROWNI 2: ZEMSTA KONSOLI");
+  pomoc();
+  rozejrzyj();
+}
+
 function pomoc() {
-  console.log("=== POMOC ===");
-  console.log("gra.start()");
-  console.log("gra.status()");
-  console.log("gra.mapa()");
-  console.log("gra.rozejrzyj()");
-  console.log("gra.idz('lewo') / gra.idz('prawo')");
-  console.log("gra.akcja('karta')");
-  console.log("gra.akcja('bezpiecznik')");
-  console.log("gra.akcja('napraw')");
-  console.log("gra.akcja('wyjdz')");
-  console.log("gra.eksportuj()");
-  console.log("gra.importuj(tekst)");
+  console.log("=== POMOC I INSTRUKCJA ===");
+  console.log(' - gra.start() - restartuje grę.');
+  console.log(' - gra.pomoc() - wyświetla instrukcję.');
+  console.log(' - gra.status() - pokazuje aktualny stan gry.');
+  console.log(' - gra.mapa() - pokazuje plan pomieszczeń.');
+  console.log(' - gra.rozejrzyj() - rozgląda się po pokoju.');
+  console.log(' - gra.idz("lewo") / gra.idz("prawo") - poruszanie się.');
+  console.log(' - gra.akcja("karta") / gra.akcja("bezpiecznik") / gra.akcja("napraw") / gra.akcja("wyjdz")');
+  console.log(' - gra.eksportuj() - generuje kod JSON zapisu.');
+  console.log(' - gra.importuj(tekst) - wczytuje zapis z JSON.');
+  console.log(' - gra.akcja("automat") - podchodzisz do automatu w recepcji.');
+  console.log(' - gra.akcja("zagraj") - grasz na automacie (kosztuje 1 energię, szansa na nagrody).');
 }
 
 function status() {
-  console.log("--- STATUS ---");
-  console.log("Pokój: " + stan.pokoj + " (" + nazwaPokoju(stan.pokoj) + ")");
-  console.log("Energia: " + stan.energia);
-  console.log("Karta: " + stan.karta);
-  console.log("Bezpiecznik: " + stan.bezpiecznik);
-  console.log("Zasilanie: " + stan.zasilanie);
+  const p = pokoje.find(x => x.id === stan.pokoj);
+  console.log("--- STATUS GRY ---");
+  console.log("Pokój: " + stan.pokoj + " (" + p.nazwa + ")");
+  console.log("Energia: " + stan.energia + " / " + MAKS_ENERGIA);
+  console.log("Karta: " + (stan.karta ? "tak" : "nie"));
+  console.log("Bezpiecznik: " + (stan.bezpiecznik ? "tak" : "nie"));
+  console.log("Zasilanie: " + (stan.zasilanie ? "aktywne" : "wyłączone"));
+  console.log("Koniec: " + (stan.koniec ? "tak" : "nie") + " | Wygrana: " + (stan.wygrana ? "tak" : "nie"));
+  console.log("Kod secretu: " + (stan.kodSecretu ? "5258" : "brak"));
 }
 
 function mapa() {
-  let i = 1;
-  while (i <= 4) {
-    if (i === stan.pokoj) {
-      console.log(i + " [tu jesteś]");
+  pokoje.forEach(p => {
+    if (p.id === stan.pokoj) {
+      console.log(p.id + " " + p.nazwa + " <-- jesteś tutaj");
     } else {
-      console.log(i);
+      console.log(p.id + " " + p.nazwa);
     }
-    i++;
-  }
+  });
 }
 
 function rozejrzyj() {
-  if (stan.pokoj === 1) {
-    console.log("Jesteś w Recepcji.");
-    if (stan.karta === false) {
-      console.log("Na biurku leży karta.");
-    } else {
-      console.log("Biurko jest puste.");
-    }
-  } else if (stan.pokoj === 2) {
-    console.log("Jesteś w Magazynie.");
-    if (stan.bezpiecznik === false && stan.zasilanie === false) {
-      console.log("Na półce leży bezpiecznik.");
-    } else {
-      console.log("Półka jest pusta.");
-    }
-  } else if (stan.pokoj === 3) {
-    console.log("Jesteś w Serwerowni. Zasilanie włączone: " + stan.zasilanie);
-  } else if (stan.pokoj === 4) {
-    console.log("Stoisz przy Wyjściu.");
+  const p = pokoje.find(x => x.id === stan.pokoj);
+  console.log("Jesteś w: " + p.nazwa + ". " + p.opis);
+  if (stan.pokoj === 1 && stan.karta) console.log("Biurko jest puste.");
+  if (stan.pokoj === 2 && (stan.bezpiecznik || stan.zasilanie)) console.log("Półka jest pusta.");
+  if (stan.pokoj === 3) console.log("Zasilanie: " + (stan.zasilanie ? "Włączone" : "Wyłączone"));
+}
+
+function idz(kierunek) {
+  const wynik = przejscie(stan, kierunek);
+  console.log(wynik.komunikat);
+  stan = wynik.stan;
+  if (!stan.koniec && wynik.komunikat.includes("Idziesz do")) {
+    rozejrzyj();
   }
 }
 
-window.gra = {
-  start: function() {
-    stan = stanPoczatkowy();
-    console.log("Start gry! Zasilanie: 10 tur.");
-    pomoc();
-    rozejrzyj();
-  },
-  status: function() {
+function akcja(co) {
+  const wynik = przejscie(stan, co);
+  console.log(wynik.komunikat);
+  stan = wynik.stan;
+}
+
+function eksportuj() {
+  const json = eksportujStan(stan);
+  console.log("--- ZAPIS GRY (JSON) ---");
+  console.log(json);
+  return json;
+}
+
+function importuj(tekst) {
+  try {
+    const wczytanyStan = importujStan(tekst);
+    stan = wczytanyStan;
+    console.log("Gra została pomyślnie wczytana!");
     status();
-  },
-  mapa: function() {
-    mapa();
-  },
-  rozejrzyj: function() {
     rozejrzyj();
-  },
-  pomoc: function() {
-    pomoc();
-  },
-  idz: function(kierunek) {
-    let wynik = przejscie(stan, kierunek);
-    stan = wynik.stan;
-    console.log(wynik.komunikat);
-    if (stan.koniec === false && stan.wygrana === false) {
-      rozejrzyj();
-    }
-  },
-  akcja: function(co) {
-    let wynik = przejscie(stan, co);
-    stan = wynik.stan;
-    console.log(wynik.komunikat);
-  },
-  eksportuj: function() {
-    return eksportuj(stan);
-  },
-  importuj: function(tekst) {
-    let nowyStan = importuj(tekst);
-    if (nowyStan !== false) {
-      stan = nowyStan;
-      console.log("Sukces! Wczytano stan gry.");
-      status();
-      return true;
-    }
+    return true;
+  } catch (blad) {
+    console.log("ODMOWA: Nie wczytano gry. Szczegóły: " + blad.message);
     return false;
   }
+}
+
+// Globalne API gry
+window.gra = {
+  start,
+  pomoc,
+  status,
+  mapa,
+  rozejrzyj,
+  idz,
+  akcja,
+  eksportuj,
+  importuj
 };
 
-// Automatyczny start przy ładowaniu strony
-window.gra.start();
+console.log("Skrypty załadowane pomyślnie. Wpisz w konsoli: gra.start()");
